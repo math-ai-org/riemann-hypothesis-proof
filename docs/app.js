@@ -85,7 +85,7 @@
 
   /* ---------- hero field: one dot per module, by import depth ---------- */
   const FIELD = ['#4f9bf5', '#f0733f', '#25c08a', '#e0a020', '#ea6c9c', '#35c235', '#9a9992'];
-  function drawCosmos() {
+  function drawCosmos2D() {
     const cv = $('#cosmos'); if (!cv || !D.depth) return;
     const dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth, H = cv.clientHeight;
     cv.width = W * dpr; cv.height = H * dpr;
@@ -118,6 +118,92 @@
     cv.classList.add('on');
   }
 
+
+  /* 3D version: the same dots as a rotating volume, drawn with WebGL; falls back to the flat drawing. */
+  const VS = `attribute vec3 p; attribute vec3 c; attribute float sz;
+    uniform float rot, yaw, pitch, aspect, dpr; varying vec3 vc; varying float va;
+    void main(){
+      float cr = cos(rot), sr = sin(rot);
+      vec3 q = vec3(p.x, p.y*cr - p.z*sr, p.y*sr + p.z*cr);
+      float cy = cos(yaw), sy = sin(yaw);
+      q = vec3(q.x*cy + q.z*sy, q.y, -q.x*sy + q.z*cy);
+      float cp = cos(pitch), sp = sin(pitch);
+      q = vec3(q.x, q.y*cp - q.z*sp, q.y*sp + q.z*cp);
+      float k = 2.6 / (2.6 - q.z);
+      gl_Position = vec4(q.x*0.88*k, q.y*aspect*0.88*k, 0.0, 1.0);
+      gl_PointSize = sz * dpr * k;
+      vc = c; va = clamp(0.35 + 0.65*k*k*0.6, 0.25, 1.0);
+    }`;
+  const FS = `precision mediump float; varying vec3 vc; varying float va;
+    void main(){ vec2 d = gl_PointCoord - 0.5; float r = length(d)*2.0; if (r > 1.0) discard;
+      float a = (1.0 - r*r) * 0.46; gl_FragColor = vec4(vc*a*va, a*va); }`;
+  let cosmos = null;
+  function hex3(h) { const c = d3.rgb(h); return [c.r / 255, c.g / 255, c.b / 255]; }
+  function initCosmos3D(cv) {
+    const gl = cv.getContext('webgl', { antialias: false, alpha: true, premultipliedAlpha: true });
+    if (!gl) return null;
+    const sh = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
+    const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS); if (!v || !f) return null;
+    const prog = gl.createProgram(); gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    const rows = D.depth.rows, groups = D.depth.groups, maxD = rows[rows.length - 1][0];
+    const totals = rows.map((r) => d3.sum(r.slice(1))), maxN = d3.max(totals), N = d3.sum(totals) + 1;
+    const buf = new Float32Array(N * 7), cols = FIELD.map(hex3);
+    let seed = 20261120, o = 0;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    rows.forEach((r, i) => {
+      const h = Math.max(0.006, Math.sqrt(totals[i] / maxN) * 0.27), cx = -1 + 2 * r[0] / maxD;
+      for (let g = 0; g < groups.length; g++) for (let k = 0; k < r[g + 1]; k++) {
+        const rad = h * Math.sqrt(rnd()) * (0.75 + 0.5 * rnd()), th = rnd() * 6.2831853;
+        buf[o++] = cx + (rnd() - 0.5) * 2.4 / maxD; buf[o++] = rad * Math.cos(th); buf[o++] = rad * Math.sin(th);
+        buf[o++] = cols[g][0]; buf[o++] = cols[g][1]; buf[o++] = cols[g][2]; buf[o++] = 1.5 + rnd() * 1.0;
+      }
+    });
+    buf.set([-1, 0, 0, 3.0, 2.5, 1.5, 46], o);   // Main, the glowing point at the left end
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
+    gl.useProgram(prog);
+    [['p', 3, 0], ['c', 3, 12], ['sz', 1, 24]].forEach(([n, size, off]) => { const l = gl.getAttribLocation(prog, n); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 28, off); });
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.clearColor(0, 0, 0, 0);
+    const U = {}; ['rot', 'yaw', 'pitch', 'aspect', 'dpr'].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
+    const st = { gl, U, N, rot: 0, yaw: 0.35, pitch: 0.12, tyaw: 0.35, tpitch: 0.12, visible: true, still: matchMedia('(prefers-reduced-motion: reduce)').matches, last: 0 };
+    st.frame = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth, H = cv.clientHeight;
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+      gl.viewport(0, 0, cv.width, cv.height); gl.clear(gl.COLOR_BUFFER_BIT);
+      st.yaw += (st.tyaw - st.yaw) * 0.06; st.pitch += (st.tpitch - st.pitch) * 0.06;
+      gl.uniform1f(U.rot, st.rot); gl.uniform1f(U.yaw, st.yaw); gl.uniform1f(U.pitch, st.pitch); gl.uniform1f(U.aspect, W / H); gl.uniform1f(U.dpr, dpr);
+      gl.drawArrays(gl.POINTS, 0, N);
+    };
+    const loop = (now) => { if (st.visible && !st.still) { st.rot += Math.min(50, now - (st.last || now)) * 0.00016; st.frame(); } st.last = now; requestAnimationFrame(loop); };
+    const hero = cv.closest('.grand');
+    hero.addEventListener('pointermove', (ev) => { const b = hero.getBoundingClientRect(); st.tyaw = 0.35 + ((ev.clientX - b.left) / b.width - 0.5) * 0.9; st.tpitch = 0.12 + ((ev.clientY - b.top) / b.height - 0.5) * 0.5; if (st.still) st.frame(); });
+    hero.addEventListener('pointerleave', () => { st.tyaw = 0.35; st.tpitch = 0.12; });
+    new IntersectionObserver((es) => { st.visible = es[0].isIntersecting; }).observe(cv);
+    st.frame(); requestAnimationFrame(loop);
+    return st;
+  }
+  function drawCosmos() {
+    const cv = $('#cosmos'); if (!cv || !D.depth) return;
+    if (cosmos === null) { try { cosmos = initCosmos3D(cv) || false; } catch (e) { cosmos = false; } }
+    if (cosmos) { cosmos.frame(); cv.classList.add('on'); } else drawCosmos2D();
+  }
+
+  /* ---------- tilt and reveal ---------- */
+  const motionOK = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function tilt(sel) {
+    if (!motionOK) return;
+    document.querySelectorAll(sel).forEach((el) => {
+      if (el.dataset.tilt) return; el.dataset.tilt = 1;
+      el.addEventListener('pointermove', (ev) => { const b = el.getBoundingClientRect(), x = (ev.clientX - b.left) / b.width - 0.5, y = (ev.clientY - b.top) / b.height - 0.5;
+        el.style.transform = `perspective(700px) rotateX(${(-y * 10).toFixed(2)}deg) rotateY(${(x * 12).toFixed(2)}deg) translateZ(8px)`; });
+      el.addEventListener('pointerleave', () => { el.style.transform = ''; });
+    });
+  }
+  if (motionOK) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('section.block, .finale .wrap, .ages li').forEach((el) => { el.classList.add('reveal'); io.observe(el); });
+  }
+
   /* ---------- key figures ---------- */
   let kpiAnimated = false;
   function renderKpis() {
@@ -131,6 +217,7 @@
       ['Escape hatches found', full(h), 'sorry, axiom, native_decide, …'],
     ];
     $('#kpis').innerHTML = k.map(([l, v, n]) => `<div class="kpi"><div class="k-label">${l}</div><div class="k-value">${v}</div><div class="k-note">${esc(n)}</div></div>`).join('');
+    tilt('.kpi');
     if (!kpiAnimated && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       kpiAnimated = true;
       const targets = [s.modules, s.lines, s.theorems, s.definitions, s.longestChain, h], fmts = [compact, compact, compact, compact, full, full];
