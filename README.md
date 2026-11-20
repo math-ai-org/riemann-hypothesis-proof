@@ -6,8 +6,15 @@ generalized Riemann Hypothesis for Dirichlet L-functions as theorems.
 ## Source
 
 The Lean project is from Levent Alpöge, published at https://alpo.ge/ (the archive `lean.tar.gz`,
-downloaded November 20, 2026). This repository mirrors it unchanged; only this README and a
-`.gitignore` were added.
+downloaded November 20, 2026). This repository mirrors it unchanged; only this README, a `.gitignore`
+and the `docs/` site were added.
+
+## Visualization
+
+`docs/` holds a static site that maps the project: the main theorems, where the code is, how the
+libraries import one another, how deep the imports go below `Main`, the longest import chain, an
+import explorer, and a scan for `sorry`, `axiom` and similar keywords. Regenerate its data with
+`python3 docs/tools/scan.py && python3 docs/tools/build_data.py`.
 
 ## Main theorems
 

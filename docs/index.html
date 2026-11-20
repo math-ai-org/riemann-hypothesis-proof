@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Riemann Hypothesis Proof — a map of the Lean project</title>
+  <meta name="description" content="An interactive map of a Lean 4 project whose main theorem is the Riemann Hypothesis: its statements, its 175,187 modules, and how they import one another.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <span class="brand">RH in Lean</span>
+      <nav aria-label="Sections">
+        <a href="#theorems">Theorems</a>
+        <a href="#code">Codebase</a>
+        <a href="#libraries">Libraries</a>
+        <a href="#depth">Import depth</a>
+        <a href="#chain">Longest chain</a>
+        <a href="#explorer">Explorer</a>
+        <a href="#checks">Checks</a>
+      </nav>
+      <button class="theme" id="theme" type="button" aria-label="Color theme">Theme: auto</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <h1>The Riemann Hypothesis, as a Lean 4 project</h1>
+      <p class="lede">A map of a Lean 4 project, built on Mathlib, whose main file proves Mathlib's statement of the Riemann Hypothesis, along with the generalized Riemann Hypothesis for Dirichlet L-functions. Every number on this page is computed from the source files.</p>
+      <p class="credit">Lean project by Levent Alpöge, published at <a href="https://alpo.ge/">alpo.ge</a>. Repository: <a href="https://github.com/math-ai-org/riemann-hypothesis-proof">math-ai-org/riemann-hypothesis-proof</a>.</p>
+      <div class="statement">
+        <div class="label">src/Main.lean</div>
+        <pre><code>theorem riemannHypothesis : RiemannHypothesis := rhOfAll</code></pre>
+      </div>
+    </section>
+
+    <section class="block" aria-labelledby="kpi-h">
+      <h2 id="kpi-h" class="visually-hidden" style="position:absolute;left:-9999px">Key figures</h2>
+      <div class="kpis" id="kpis"><p class="loading">Loading…</p></div>
+    </section>
+
+    <section class="block" id="theorems">
+      <h2>The main theorems</h2>
+      <p class="sub"><code>src/Main.lean</code> proves five statements. <code>RiemannHypothesis</code> is Mathlib's own definition; the other four are defined in <code>src/Statements.lean</code>, which imports only Mathlib.</p>
+      <div class="card">
+        <table class="theorems">
+          <thead><tr><th>Theorem</th><th>Statement</th></tr></thead>
+          <tbody>
+            <tr><td><code>riemannHypothesis</code></td><td><code>RiemannHypothesis</code>, as defined in Mathlib.</td></tr>
+            <tr><td><code>riemannZeta_eq_zero_re</code></td><td>Every zero of the Riemann zeta function, other than the trivial zeros −2(n+1) and the point s = 1, has real part 1/2.</td></tr>
+            <tr><td><code>LFunction_ne_zero_of_half_lt_re</code></td><td>For every Dirichlet character χ, L(χ, s) ≠ 0 whenever Re s &gt; 1/2, except at the pole χ = 1, s = 1.</td></tr>
+            <tr><td><code>LFunction_eq_zero_re</code></td><td>Every zero of a Dirichlet L-function in the strip 0 &lt; Re s &lt; 1 has real part 1/2.</td></tr>
+            <tr><td><code>LFunction_eq_zero_re_of_isPrimitive</code></td><td>The same statement for primitive Dirichlet characters.</td></tr>
+          </tbody>
+        </table>
+        <details class="src"><summary>Show <code>src/Statements.lean</code></summary><pre class="lean"><code id="statements-src"></code></pre></details>
+        <details class="src"><summary>Show <code>src/Main.lean</code></summary><pre class="lean"><code id="main-src"></code></pre></details>
+      </div>
+    </section>
+
+    <section class="block" id="code">
+      <h2>Where the code is</h2>
+      <p class="sub">Each bar is a folder under <code>src/</code>. Click a bar to open it; the path above the chart takes you back up.</p>
+      <div class="card">
+        <div class="controls">
+          <div class="seg" role="group" aria-label="Measure" id="tree-metric">
+            <button type="button" data-m="l" aria-pressed="true">Lines</button>
+            <button type="button" data-m="f" aria-pressed="false">Modules</button>
+            <button type="button" data-m="t" aria-pressed="false">Theorems</button>
+            <button type="button" data-m="d" aria-pressed="false">Definitions</button>
+          </div>
+          <div class="crumbs" id="tree-crumbs" aria-label="Folder path"></div>
+        </div>
+        <div class="chart" id="tree-chart"></div>
+      </div>
+    </section>
+
+    <section class="block" id="libraries">
+      <h2>How the libraries import one another</h2>
+      <p class="sub">Rows import from columns. Each cell counts import lines from modules in the row's library to modules in the column's library; the diagonal counts imports within a library. Color is on a log scale.</p>
+      <div class="card">
+        <div class="chart" id="matrix-chart"></div>
+        <details class="table-view"><summary>Table view</summary><div class="tv" id="matrix-table"></div></details>
+      </div>
+    </section>
+
+    <section class="block" id="depth">
+      <h2>How deep the imports go</h2>
+      <p class="sub">A module's depth is the length of the longest import path from <code>Main</code> down to it. Every module in the project is reachable from <code>Main</code>, so this chart covers all of them.</p>
+      <div class="card">
+        <div class="legend" id="depth-legend"></div>
+        <div class="chart" id="depth-chart"></div>
+        <details class="table-view"><summary>Table view</summary><div class="tv" id="depth-table"></div></details>
+      </div>
+    </section>
+
+    <section class="block" id="chain">
+      <h2>The longest import chain</h2>
+      <p class="sub" id="chain-sub">The longest path of imports below <code>Main</code>, one block per module, colored by library. Hover or focus a block to see the module.</p>
+      <div class="card">
+        <div class="legend" id="chain-legend"></div>
+        <div class="chain-strip" id="chain-strip"></div>
+        <ol class="chain-list" id="chain-list"></ol>
+      </div>
+    </section>
+
+    <section class="block" id="explorer">
+      <h2>Import explorer</h2>
+      <p class="sub">Start at <code>Main</code> and follow its imports. Modules up to <span id="ex-depth">10</span> levels below <code>Main</code> can be opened; deeper modules are listed with their size and number of imports.</p>
+      <div class="card">
+        <div class="crumbs" id="ex-crumbs" aria-label="Import path" style="margin-bottom:12px"></div>
+        <div id="ex-body"><p class="loading">Loading the explorer data (2 MB)…</p></div>
+      </div>
+    </section>
+
+    <section class="block" id="fanin">
+      <h2>The most imported modules</h2>
+      <p class="sub">Modules imported by the largest number of other modules in the project.</p>
+      <div class="card"><div class="chart" id="fanin-chart"></div></div>
+    </section>
+
+    <section class="block" id="mathlib">
+      <h2>What it uses from Mathlib</h2>
+      <p class="sub" id="mathlib-sub"></p>
+      <div class="kpis" id="mathlib-kpis"></div>
+      <div class="card" style="margin-top:16px">
+        <h3>Mathlib modules imported by name</h3>
+        <p class="note">The specific Mathlib files that project modules import most often, beyond <code>import Mathlib</code>.</p>
+        <div class="chart" id="mathlib-chart"></div>
+      </div>
+    </section>
+
+    <section class="block" id="checks">
+      <h2>Escape hatches</h2>
+      <p class="sub">Keywords that would leave a proof incomplete or let code bypass Lean's kernel check, counted across all source files, comments included.</p>
+      <div class="card">
+        <table class="checks">
+          <thead><tr><th>Keyword</th><th>What it does</th><th>Lines found</th></tr></thead>
+          <tbody id="checks-body"></tbody>
+        </table>
+        <p class="note" style="margin:14px 0 0">This is a text search of the sources. The definitive check is to build the project and ask Lean which axioms the main theorem uses: <code>lake exe cache get &amp;&amp; lake build</code>, then <code>#print axioms riemannHypothesis</code>, which for a complete proof lists only <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>The Lean project is by Levent Alpöge, from <a href="https://alpo.ge/">alpo.ge</a>.</p>
+      <p>Figures come from a text scan of every <code>.lean</code> file under <code>src/</code> (<code>docs/tools/scan.py</code> and <code>docs/tools/build_data.py</code>), generated on <span id="gen-date"></span>. Declarations are counted by their keyword at the start of a line; imports are read from each file's header.</p>
+    </div>
+  </footer>
+
+  <div class="tip" id="tip" role="tooltip"></div>
+  <script src="app.js"></script>
+</body>
+</html>

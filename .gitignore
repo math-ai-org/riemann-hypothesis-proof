@@ -1,2 +1,4 @@
 /.lake/
 .DS_Store
+/docs/tools/modules.json
+__pycache__/
