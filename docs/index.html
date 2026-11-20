@@ -25,17 +25,30 @@
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="hero">
-      <h1>The Riemann Hypothesis, as a Lean 4 project</h1>
-      <p class="lede">A map of a Lean 4 project, built on Mathlib, whose main file proves Mathlib's statement of the Riemann Hypothesis, along with the generalized Riemann Hypothesis for Dirichlet L-functions. Every number on this page is computed from the source files.</p>
-      <p class="credit">Lean project by Levent Alpöge, published at <a href="https://alpo.ge/">alpo.ge</a>. Repository: <a href="https://github.com/math-ai-org/riemann-hypothesis-proof">math-ai-org/riemann-hypothesis-proof</a>.</p>
+  <section class="grand" aria-labelledby="grand-h">
+    <div class="wrap">
+      <p class="eyebrow">The Magnificent Age of Research</p>
+      <h1 id="grand-h">The Riemann<br>Hypothesis</h1>
+      <p class="lede">Posed in 1859. Here it stands as a theorem in a Lean 4 project of <b>175,187</b> modules and <b>17.4 million</b> lines, every one of them reachable from a single statement.</p>
       <div class="statement">
         <div class="label">src/Main.lean</div>
         <pre><code>theorem riemannHypothesis : RiemannHypothesis := rhOfAll</code></pre>
       </div>
-    </section>
+    </div>
+    <canvas id="cosmos" role="img" aria-label="A field of 175,187 dots, one per module, spread from the main theorem on the left to the deepest foundations on the right and colored by library."></canvas>
+    <div class="wrap">
+      <p class="cap">Every dot is one module: 175,187 in all, placed by its import depth below <code>Main</code> (left edge) and colored by library. The chain runs 203 modules deep.</p>
+      <ol class="ages">
+        <li><span class="yr">1859</span><span class="what">Riemann states the hypothesis in his memoir on the number of primes below a given magnitude.</span></li>
+        <li><span class="yr">1900</span><span class="what">Hilbert includes it in the eighth of his twenty-three problems.</span></li>
+        <li><span class="yr">2000</span><span class="what">The Clay Mathematics Institute names it a Millennium Prize Problem.</span></li>
+        <li><span class="yr">2026</span><span class="what">Levent Alpöge publishes this Lean 4 project, whose main theorem is Mathlib's <code>RiemannHypothesis</code>.</span></li>
+      </ol>
+      <p class="credit">Lean project by Levent Alpöge, published at <a href="https://alpo.ge/">alpo.ge</a>. Repository: <a href="https://github.com/math-ai-org/riemann-hypothesis-proof">math-ai-org/riemann-hypothesis-proof</a>. Every number on this page is computed from the source files.</p>
+    </div>
+  </section>
 
+  <main class="wrap">
     <section class="block" aria-labelledby="kpi-h">
       <h2 id="kpi-h" class="visually-hidden" style="position:absolute;left:-9999px">Key figures</h2>
       <div class="kpis" id="kpis"><p class="loading">Loading…</p></div>
@@ -144,6 +157,16 @@
       </div>
     </section>
   </main>
+
+  <section class="finale">
+    <div class="wrap">
+      <p class="eyebrow">The Magnificent Age of Research</p>
+      <h2>A proof you can rebuild.</h2>
+      <p>A question from 1859 now sits in a repository anyone can clone. Its main theorem is one line; beneath it lie 818,755 theorems and lemmas that a machine can check one by one, with no referee's judgment in the loop. Run the build, then ask Lean which axioms the result rests on.</p>
+      <pre><code>lake exe cache get &amp;&amp; lake build
+#print axioms riemannHypothesis</code></pre>
+    </div>
+  </section>
 
   <footer>
     <div class="wrap">

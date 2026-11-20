@@ -172,3 +172,44 @@ footer p { margin: 0 0 8px; }
   ul.imports .meter { display: none; }
   table.theorems td:first-child { white-space: normal; }
 }
+
+/* ---------- grand hero, always dark ---------- */
+:root { --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; --gold: #d8bb72; }
+.grand, .finale { background: #06070b; color: #f0efec; position: relative; overflow: hidden; }
+.grand { padding: 84px 0 56px;
+  background: radial-gradient(1200px 520px at 18% 62%, rgba(57, 135, 229, 0.16), transparent 70%),
+              radial-gradient(900px 420px at 86% 20%, rgba(216, 187, 114, 0.10), transparent 70%), #06070b; }
+.grand .eyebrow, .finale .eyebrow { font-size: 12.5px; letter-spacing: 0.34em; text-transform: uppercase; color: var(--gold); margin: 0 0 22px; }
+.grand h1 { font-family: var(--serif); font-weight: 500; font-size: clamp(54px, 10.5vw, 132px); line-height: 0.94; letter-spacing: -0.025em; margin: 0 0 28px; }
+.grand .lede { font-size: clamp(18px, 2vw, 22px); line-height: 1.5; color: #c3c2b7; max-width: 720px; margin: 0 0 26px; }
+.grand .lede b { color: #f0efec; font-weight: 600; }
+.grand .statement { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px; padding: 16px 20px; max-width: 720px; overflow-x: auto; margin: 0; }
+.grand .statement .label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #898781; margin-bottom: 6px; }
+.grand .statement pre { margin: 0; font-size: 15px; color: #f0efec; }
+#cosmos { display: block; width: 100%; height: clamp(240px, 34vw, 440px); margin: 28px 0 8px; opacity: 0; transition: opacity 1.2s ease; }
+#cosmos.on { opacity: 1; }
+.grand .cap { font-size: 13.5px; color: #898781; margin: 0 0 36px; max-width: 760px; }
+.grand .cap code, .ages code { color: #c3c2b7; }
+.ages { list-style: none; margin: 0 0 30px; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid rgba(255, 255, 255, 0.14); }
+.ages li { padding: 18px 20px 0 0; }
+.ages .yr { display: block; font-family: var(--serif); font-size: clamp(30px, 3.6vw, 46px); line-height: 1; color: var(--gold); margin-bottom: 10px; }
+.ages .what { display: block; font-size: 14.5px; line-height: 1.5; color: #c3c2b7; }
+.grand .credit { font-size: 13.5px; color: #898781; margin: 0; }
+.grand a, .finale a { color: #f0efec; }
+.finale { padding: 96px 0; margin-top: 64px;
+  background: radial-gradient(1000px 460px at 50% 110%, rgba(216, 187, 114, 0.13), transparent 70%), #06070b; }
+.finale h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(38px, 6vw, 76px); line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 22px; }
+.finale p { font-size: 18px; line-height: 1.6; color: #c3c2b7; max-width: 720px; margin: 0 0 22px; }
+.finale pre { display: inline-block; margin: 0; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 14px 18px; font-size: 14.5px; line-height: 1.7; color: #f0efec; max-width: 100%; overflow-x: auto; }
+footer { padding-top: 32px; }
+
+/* larger figures and numbered section heads */
+main.wrap { counter-reset: sec; }
+.kpis { margin-top: 8px; }
+.kpi { padding: 18px 18px 16px; }
+.kpi .k-value { font-size: clamp(30px, 3vw, 38px); line-height: 1.05; margin: 6px 0 4px; }
+section.block { padding-top: 64px; }
+section.block[id] > h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(30px, 3.6vw, 42px); line-height: 1.08; margin-bottom: 10px; counter-increment: sec; }
+section.block[id] > h2::before { content: counter(sec, upper-roman); display: block; font-family: var(--font); font-size: 12.5px; letter-spacing: 0.3em; color: var(--muted); margin-bottom: 10px; }
+section.block > p.sub { font-size: 17px; }
+@media (max-width: 720px) { .ages { grid-template-columns: 1fr 1fr; } .grand { padding-top: 56px; } }

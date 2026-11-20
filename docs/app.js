@@ -83,18 +83,66 @@
       .on('keydown', (ev, r) => { if (r.onClick && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); hideTip(); r.onClick(); } });
   }
 
+  /* ---------- hero field: one dot per module, by import depth ---------- */
+  const FIELD = ['#4f9bf5', '#f0733f', '#25c08a', '#e0a020', '#ea6c9c', '#35c235', '#9a9992'];
+  function drawCosmos() {
+    const cv = $('#cosmos'); if (!cv || !D.depth) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth, H = cv.clientHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
+    const rows = D.depth.rows, groups = D.depth.groups, maxD = rows[rows.length - 1][0];
+    const totals = rows.map((r) => d3.sum(r.slice(1))), maxN = d3.max(totals);
+    const pad = Math.max(28, W * 0.06), span = W - 2 * pad, colW = span / maxD, mid = H / 2, hmax = H * 0.44;
+    const x = (d) => pad + (d / maxD) * span;
+    let seed = 20261120;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.72;
+    rows.forEach((r, i) => {
+      const h = Math.max(2, Math.sqrt(totals[i] / maxN) * hmax), cx = x(r[0]);
+      for (let g = 0; g < groups.length; g++) {
+        ctx.fillStyle = FIELD[g];
+        for (let k = 0; k < r[g + 1]; k++) {
+          const u = ((rnd() + rnd() + rnd()) / 3) * 2 - 1;
+          ctx.fillRect(cx + (rnd() - 0.5) * colW * 1.8, mid + u * h * 1.5, 1.25, 1.25);
+        }
+      }
+    });
+    ctx.globalAlpha = 1;
+    const glow = ctx.createRadialGradient(x(0), mid, 0, x(0), mid, 34);
+    glow.addColorStop(0, 'rgba(255,236,180,0.95)'); glow.addColorStop(0.25, 'rgba(216,187,114,0.55)'); glow.addColorStop(1, 'rgba(216,187,114,0)');
+    ctx.fillStyle = glow; ctx.fillRect(x(0) - 34, mid - 34, 68, 68);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = '12px system-ui, -apple-system, "Segoe UI", sans-serif'; ctx.fillStyle = '#c3c2b7';
+    ctx.textAlign = 'left'; ctx.fillText('Main', x(0) - 14, mid + 52);
+    ctx.textAlign = 'right'; ctx.fillText(`depth ${maxD}`, W - pad + 14, mid + 52);
+    cv.classList.add('on');
+  }
+
   /* ---------- key figures ---------- */
+  let kpiAnimated = false;
   function renderKpis() {
     const s = D.summary, h = Object.values(s.hatches).reduce((a, b) => a + b, 0);
     const k = [
       ['Lean modules', compact(s.modules), `${full(s.modules)} files under src/`],
-      ['Lines of Lean', compact(s.lines), `${(s.bytes / 1e9).toFixed(2)} GB of source`],
+      ['Lines of Lean', compact(s.lines), `about ${full(Math.round(s.lines / 50 / 1000) * 1000)} pages at 50 lines a page`],
       ['Theorems and lemmas', compact(s.theorems), `${full(s.theorems)} declarations`],
       ['Definitions', compact(s.definitions), `def and abbrev, ${full(s.definitions)}`],
       ['Longest import chain', full(s.longestChain), 'modules, from Main down'],
       ['Escape hatches found', full(h), 'sorry, axiom, native_decide, …'],
     ];
     $('#kpis').innerHTML = k.map(([l, v, n]) => `<div class="kpi"><div class="k-label">${l}</div><div class="k-value">${v}</div><div class="k-note">${esc(n)}</div></div>`).join('');
+    if (!kpiAnimated && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      kpiAnimated = true;
+      const targets = [s.modules, s.lines, s.theorems, s.definitions, s.longestChain, h], fmts = [compact, compact, compact, compact, full, full];
+      const els = [...document.querySelectorAll('#kpis .k-value')], t0 = performance.now(), DUR = 1400;
+      const step = (now) => {
+        const p = Math.min(1, (now - t0) / DUR), e = 1 - Math.pow(1 - p, 3);
+        els.forEach((el, i) => { el.textContent = fmts[i](Math.round(targets[i] * e)); });
+        if (p < 1) requestAnimationFrame(step); else els.forEach((el, i) => { el.textContent = k[i][1]; });
+      };
+      requestAnimationFrame(step);
+      setTimeout(() => els.forEach((el, i) => { el.textContent = k[i][1]; }), DUR + 200);   // settle even if frames are throttled
+    }
     $('#statements-src').textContent = s.statementsLean.trim();
     $('#main-src').textContent = s.mainLean.trim();
     $('#gen-date').textContent = s.generated;
@@ -315,7 +363,7 @@
   /* ---------- boot ---------- */
   function renderAll() {
     if (!D.summary) return;
-    renderKpis(); renderTree(); renderMatrix(); renderDepth(); renderChain(); renderFanin(); renderMathlib(); renderChecks(); renderExplorer();
+    drawCosmos(); renderKpis(); renderTree(); renderMatrix(); renderDepth(); renderChain(); renderFanin(); renderMathlib(); renderChecks(); renderExplorer();
   }
   const files = ['summary', 'tree', 'matrix', 'depth', 'chain', 'fanin'];
   Promise.all(files.map((f) => fetch(`data/${f}.json`).then((r) => r.json()))).then((arr) => {
@@ -324,5 +372,5 @@
     treePath = [D.tree];
     renderAll();
   }).catch((e) => { $('#kpis').innerHTML = `<p class="loading">Could not load the data: ${esc(e.message)}</p>`; });
-  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { renderTree(); renderMatrix(); renderDepth(); renderFanin(); renderMathlib(); }, 150); });
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawCosmos(); renderTree(); renderMatrix(); renderDepth(); renderFanin(); renderMathlib(); }, 150); });
 })();
