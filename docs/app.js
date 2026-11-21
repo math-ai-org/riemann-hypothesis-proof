@@ -70,11 +70,13 @@
       while (node.getComputedTextLength() > labelW - lx - 10 && txt.length > 4) { txt = txt.slice(0, -1); t.text(txt + '…' + suffix); }
       const w = Math.max(x(r.value), r.value > 0 ? 2 : 0), y0 = (rowH - barH) / 2 - 1;
       if (w > 0) {
-        const rr = Math.min(4, w);
-        s.append('path').attr('class', 'bar').attr('fill', r.muted ? css('--other') : css('--s1'))
-          .attr('d', `M${labelW},${y0}h${w - rr}a${rr},${rr} 0 0 1 ${rr},${rr}v${barH - 2 * rr}a${rr},${rr} 0 0 1 -${rr},${rr}h-${w - rr}z`);
+        const base = d3.color(r.muted ? css('--other') : css('--s1')), ex = 7, ey = -6, x0 = labelW, x1 = labelW + w, y1 = y0 + barH;
+        const bar = s.append('g').attr('class', 'bar');
+        bar.append('path').attr('fill', base.brighter(0.55)).attr('d', `M${x0},${y0}L${x0 + ex},${y0 + ey}L${x1 + ex},${y0 + ey}L${x1},${y0}z`);
+        bar.append('path').attr('fill', base.darker(0.7)).attr('d', `M${x1},${y0}L${x1 + ex},${y0 + ey}L${x1 + ex},${y1 + ey}L${x1},${y1}z`);
+        bar.append('rect').attr('x', x0).attr('y', y0).attr('width', w).attr('height', barH).attr('fill', base);
       }
-      s.append('text').attr('x', labelW + w + 6).attr('y', rowH / 2 + 3).attr('font-size', 12)
+      s.append('text').attr('x', labelW + w + 14).attr('y', rowH / 2 + 3).attr('font-size', 12)
         .style('font-variant-numeric', 'tabular-nums').style('fill', css('--text-secondary')).text(opt.fmt ? opt.fmt(r.value) : compact(r.value));
     });
     g.on('mouseenter mousemove focus', function (ev, r) { if (r.tip) showTip(r.tip, ev, this); })
@@ -274,112 +276,162 @@
     renderTree();
   });
 
-  /* ---------- library matrix ---------- */
-  function lum(c) { const { r, g, b } = d3.rgb(c); const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); }
+  /* ---------- 3D canvases: shared helpers ---------- */
+  const S3 = {}, anim = {}, animKey = new WeakMap();
+  const animIO = new IntersectionObserver((es) => es.forEach((e) => { const k = animKey.get(e.target); if (k && anim[k]) anim[k].vis = e.isIntersecting; }));
+  function canvas3(el, key, height, label) {
+    el.querySelectorAll('canvas').forEach((c) => c.remove());
+    const W = el.clientWidth || 900, H = typeof height === 'function' ? height(W) : height, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cv = document.createElement('canvas');
+    cv.width = W * dpr; cv.height = H * dpr; cv.style.cssText = `display:block;width:100%;height:${H}px;touch-action:pan-y`;
+    cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', label);
+    el.prepend(cv);
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    animKey.set(cv, key); animIO.observe(cv);
+    return { cv, ctx, W, H };
+  }
+  function pos(cv, ev) { const b = cv.getBoundingClientRect(); return [ev.clientX - b.left, ev.clientY - b.top]; }
+  function inPoly(pt, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a[1] > pt[1]) !== (b[1] > pt[1]) && pt[0] < ((b[0] - a[0]) * (pt[1] - a[1])) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+  function fillPoly(ctx, pts, fill, stroke) { ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.stroke(); } }
+  if (motionOK) { const tick = (now) => { Object.values(anim).forEach((a) => { if (a.vis) a.fn(now); }); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
+  function legendHtml(groups) { return groups.map((g) => `<span class="key">${swatch(g)}${esc(g)}</span>`).join(''); }
+
+  /* ---------- library matrix: a 3D skyline ---------- */
   function renderMatrix() {
-    const M = D.matrix, el = $('#matrix-chart'), W = el.clientWidth || 900;
-    const labelW = 150, top = 96, cols = M.cols.length, rows = M.rows.length;
-    const cw = Math.max(44, (W - labelW) / cols), chh = 34, Wt = labelW + cw * cols, H = top + rows * chh + 64;
-    const max = d3.max(M.values.flat());
-    const ramp = css('--seq').split(',').map((s) => s.trim());
-    const t = d3.scaleLog().domain([1, max]).range([0, 1]).clamp(true);
-    const color = (v) => d3.interpolateRgbBasis(ramp)(t(v));
-    el.innerHTML = '';
-    const svg = d3.select(el).append('svg').attr('viewBox', `0 0 ${Wt} ${H}`).attr('role', 'img')
-      .attr('aria-label', 'Matrix of import counts between libraries; the table view below lists every value.');
-    M.cols.forEach((c, j) => {
-      const gx = labelW + j * cw + cw / 2;
-      const g = svg.append('g').attr('transform', `translate(${gx},${top - 10}) rotate(-38)`);
-      g.append('text').attr('font-size', 12).attr('text-anchor', 'start').text(c);
-    });
-    M.rows.forEach((r, i) => {
-      const y = top + i * chh;
-      svg.append('rect').attr('x', 0).attr('y', y + chh / 2 - 6).attr('width', 10).attr('height', 10).attr('rx', 3).attr('fill', groupColor(libGroup(r)));
-      svg.append('text').attr('x', 16).attr('y', y + chh / 2 + 4).attr('font-size', 13).style('fill', css('--text-primary')).text(r);
-      M.cols.forEach((c, j) => {
-        const v = M.values[i][j], x = labelW + j * cw;
-        const fill = v > 0 ? color(v) : css('--surface-2');
-        const cell = svg.append('g').attr('tabindex', 0).attr('role', 'img').attr('aria-label', `${r} imports from ${c}: ${full(v)}`);
-        cell.append('rect').attr('x', x + 1).attr('y', y + 1).attr('width', cw - 2).attr('height', chh - 2).attr('rx', 4).attr('fill', fill);
-        if (cw >= 40) cell.append('text').attr('x', x + cw / 2).attr('y', y + chh / 2 + 4).attr('text-anchor', 'middle').attr('font-size', 11.5)
-          .style('font-variant-numeric', 'tabular-nums').style('fill', v > 0 ? (lum(fill) > 0.42 ? '#0b0b0b' : '#ffffff') : css('--muted')).text(v > 0 ? compact(v) : '–');
-        cell.on('mouseenter mousemove focus', function (ev) {
-          showTip(tipRows(`${esc(r)} → ${esc(c)}`, [['Import lines', full(v)], [`Share of ${esc(r)}'s imports`, pct(v, d3.sum(M.values[i]))]]), ev, this);
-        }).on('mouseleave blur', hideTip);
+    const M = D.matrix, el = $('#matrix-chart'), R = M.rows.length, C = M.cols.length;
+    const { cv, ctx, W, H } = canvas3(el, 'matrix', (w) => Math.max(360, Math.min(600, w * 0.56)), 'Three-dimensional skyline of import counts between libraries; the table view below lists every value.');
+    const st = S3.matrix || (S3.matrix = { yaw: 0.62, pitch: 0.6, hover: null, drag: null });
+    const max = d3.max(M.values.flat()), ramp = css('--seq').split(',').map((x) => x.trim());
+    const t = d3.scaleLog().domain([1, max]).range([0, 1]).clamp(true), color = (v) => d3.interpolateRgbBasis(ramp)(t(v));
+    const ink = css('--text-secondary'), inkP = css('--text-primary'), surf = css('--surface-1'), flat = css('--surface-2');
+    const narrow = W < 640, unit = Math.min(W / (C * 0.98 + R * 0.72 + (narrow ? 1 : 3.5)), H / 10.2);
+    const draw = (now) => {
+      const yaw = st.yaw + (motionOK && !st.drag && !st.hover ? Math.sin(now / 2600) * 0.07 : 0), sn = Math.sin(yaw), cs = Math.cos(yaw), sp = Math.sin(st.pitch), cp = Math.cos(st.pitch);
+      const cx = W / 2 + unit * (narrow ? 0.6 : 1.1), cy = H * 0.5;
+      const P = (x, y, z) => { const x1 = x * cs + z * sn, z1 = -x * sn + z * cs; return [cx + x1 * unit, cy - (y * cp - z1 * sp) * unit, y * sp + z1 * cp]; };
+      ctx.clearRect(0, 0, W, H); ctx.lineWidth = 0.7; ctx.lineJoin = 'round';
+      const boxes = [];
+      for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) {
+        const v = M.values[i][j], h = v > 0 ? 0.3 + 3.3 * t(v) : 0.05, x0 = j - C / 2 + 0.11, x1 = x0 + 0.78, z0 = i - R / 2 + 0.11, z1 = z0 + 0.78;
+        boxes.push({ i, j, v, h, x0, x1, z0, z1, d: P((x0 + x1) / 2, 0, (z0 + z1) / 2)[2] });
+      }
+      boxes.sort((a, b) => a.d - b.d);
+      boxes.forEach((b) => {
+        const base = d3.color(b.v > 0 ? color(b.v) : flat), { x0, x1, z0, z1, h } = b;
+        fillPoly(ctx, [P(x0, 0, z0), P(x0, 0, z1), P(x0, h, z1), P(x0, h, z0)], base.darker(0.95), surf);
+        fillPoly(ctx, [P(x0, 0, z1), P(x1, 0, z1), P(x1, h, z1), P(x0, h, z1)], base.darker(0.45), surf);
+        b.top = [P(x0, h, z0), P(x1, h, z0), P(x1, h, z1), P(x0, h, z1)];
+        const hot = st.hover && st.hover.i === b.i && st.hover.j === b.j;
+        fillPoly(ctx, b.top, hot ? base.brighter(0.6) : base, hot ? inkP : surf);
       });
+      st.boxes = boxes;
+      ctx.font = `${narrow ? 10.5 : 12.5}px system-ui, -apple-system, "Segoe UI", sans-serif`; ctx.textBaseline = 'middle';
+      M.rows.forEach((r, i) => { const p = P(-C / 2 - 0.3, 0, i - R / 2 + 0.5); ctx.textAlign = 'right'; ctx.fillStyle = st.hover && st.hover.i === i ? inkP : ink; ctx.fillText(narrow && r.length > 9 ? r.slice(0, 8) + '…' : r, p[0], p[1]); });
+      M.cols.forEach((c, j) => { const p = P(j - C / 2 + 0.5, 0, R / 2 + 0.35); ctx.save(); ctx.translate(p[0], p[1]); ctx.rotate(0.95); ctx.textAlign = 'left'; ctx.fillStyle = st.hover && st.hover.j === j ? inkP : ink; ctx.fillText(narrow && c.length > 9 ? c.slice(0, 8) + '…' : c, 0, 0); ctx.restore(); });
+    };
+    anim.matrix = { fn: draw, vis: true }; draw(performance.now());
+    const pick = (pt) => { const B = st.boxes || []; for (let k = B.length - 1; k >= 0; k--) if (inPoly(pt, B[k].top)) return B[k]; return null; };
+    cv.style.cursor = 'grab';
+    cv.addEventListener('pointerdown', (ev) => { st.drag = { x: ev.clientX, y: ev.clientY, yaw: st.yaw, pitch: st.pitch }; cv.setPointerCapture(ev.pointerId); cv.style.cursor = 'grabbing'; hideTip(); });
+    cv.addEventListener('pointerup', () => { st.drag = null; cv.style.cursor = 'grab'; });
+    cv.addEventListener('pointermove', (ev) => {
+      if (st.drag) { st.yaw = Math.max(0.2, Math.min(1.2, st.drag.yaw + (ev.clientX - st.drag.x) * 0.006)); st.pitch = Math.max(0.3, Math.min(1.05, st.drag.pitch + (ev.clientY - st.drag.y) * 0.005)); draw(performance.now()); return; }
+      const b = pick(pos(cv, ev)); st.hover = b ? { i: b.i, j: b.j } : null;
+      if (b) showTip(tipRows(`${esc(M.rows[b.i])} → ${esc(M.cols[b.j])}`, [['Import lines', full(b.v)], [`Share of ${esc(M.rows[b.i])}'s imports`, pct(b.v, d3.sum(M.values[b.i]))]]), ev, cv); else hideTip();
+      draw(performance.now());
     });
-    // scale legend
-    const ly = top + rows * chh + 22, lw = Math.min(320, Wt - labelW), lx = labelW;
-    const defs = svg.append('defs'), gid = 'mgrad';
-    const lg = defs.append('linearGradient').attr('id', gid);
-    ramp.forEach((c, k) => lg.append('stop').attr('offset', `${(100 * k) / (ramp.length - 1)}%`).attr('stop-color', c));
-    svg.append('rect').attr('x', lx).attr('y', ly).attr('width', lw).attr('height', 8).attr('rx', 4).attr('fill', `url(#${gid})`);
-    const ticks = [1, 10, 100, 1e3, 1e4, 1e5, 1e6].filter((v) => v <= max);
-    ticks.forEach((v) => svg.append('text').attr('x', lx + t(v) * lw).attr('y', ly + 24).attr('text-anchor', 'middle').attr('font-size', 11).style('fill', css('--muted')).text(compact(v)));
-    svg.append('text').attr('x', lx + lw + 10).attr('y', ly + 8).attr('font-size', 12).style('fill', css('--muted')).text('import lines (log scale)');
-    // table view
+    cv.addEventListener('pointerleave', () => { st.hover = null; hideTip(); draw(performance.now()); });
+    let lg = el.querySelector('.scale'); if (!lg) { lg = document.createElement('div'); lg.className = 'scale'; el.appendChild(lg); }
+    lg.innerHTML = `<span>1</span><i style="background:linear-gradient(90deg,${ramp.join(',')})"></i><span>${compact(max)}</span><span class="what">import lines: height and color, log scale. Drag to turn.</span>`;
     $('#matrix-table').innerHTML = `<table><thead><tr><th>Importer ↓ / imported →</th>${M.cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>` +
       M.rows.map((r, i) => `<tr><td>${esc(r)}</td>${M.values[i].map((v) => `<td>${full(v)}</td>`).join('')}</tr>`).join('') + '</tbody></table>';
   }
 
-  /* ---------- depth profile (stacked columns) ---------- */
-  function legendHtml(groups) { return groups.map((g) => `<span class="key">${swatch(g)}${esc(g)}</span>`).join(''); }
+  /* ---------- depth profile: one 3D ridge per library ---------- */
   function renderDepth() {
-    const P = D.depth, el = $('#depth-chart'), W = el.clientWidth || 900, H = 300;
-    const m = { t: 10, r: 10, b: 36, l: 52 };
-    const rows = P.rows.map((r) => { const o = { d: r[0] }; P.groups.forEach((g, i) => { o[g] = r[i + 1]; }); o.total = d3.sum(r.slice(1)); return o; });
-    const x = d3.scaleBand().domain(rows.map((r) => r.d)).range([m.l, W - m.r]).paddingInner(0);
-    const y = d3.scaleLinear().domain([0, d3.max(rows, (r) => r.total)]).nice().range([H - m.b, m.t]);
-    const stack = d3.stack().keys(P.groups)(rows);
-    el.innerHTML = '';
-    const svg = d3.select(el).append('svg').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img')
-      .attr('aria-label', 'Stacked columns of module counts by import depth and library; the table view below lists every value.');
-    svg.append('g').attr('class', 'grid').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(W - m.l - m.r)).tickFormat(''));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickFormat((v) => compact(v)).tickSizeOuter(0));
-    svg.append('g').attr('class', 'axis').attr('transform', `translate(0,${H - m.b})`)
-      .call(d3.axisBottom(x).tickValues(rows.map((r) => r.d).filter((d) => d % 20 === 0)).tickSizeOuter(0));
-    svg.append('text').attr('x', W - m.r).attr('y', H - 4).attr('text-anchor', 'end').attr('font-size', 12).style('fill', css('--muted')).text('depth below Main (import levels)');
-    const bw = Math.max(1, x.bandwidth() - 1);
-    stack.forEach((layer, li) => {
-      svg.append('g').attr('fill', groupColor(P.groups[li])).selectAll('rect').data(layer).join('rect')
-        .attr('x', (d) => x(d.data.d)).attr('width', bw)
-        .attr('y', (d) => y(d[1]) + (y(d[0]) - y(d[1]) > 3 ? 1 : 0))
-        .attr('height', (d) => Math.max(0, y(d[0]) - y(d[1]) - (y(d[0]) - y(d[1]) > 3 ? 1 : 0)));
+    const Pd = D.depth, el = $('#depth-chart'), G = Pd.groups.length, B = G - 1;
+    const { cv, ctx, W, H } = canvas3(el, 'depth', (w) => (w < 640 ? 320 : 420), 'Three-dimensional ridges of module counts by import depth, one ridge per library; the table view below lists every value.');
+    const st = S3.depth || (S3.depth = { px: 0, py: 0, hover: null });
+    const rows = Pd.rows, maxD = rows[rows.length - 1][0], byD = new Map(rows.map((r) => [r[0], r]));
+    const maxV = d3.max(rows, (r) => d3.max(r.slice(1))), narrow = W < 640;
+    const m = { l: narrow ? 40 : 54, r: narrow ? 12 : 128, t: 12, b: 34 }, DX = narrow ? 9 : 17, DY = narrow ? 12 : 17;
+    const plotW = W - m.l - m.r - (DX + 6) * B, plotH = H - m.t - m.b - (DY + 4) * B, hs = d3.scaleSqrt().domain([0, maxV]).range([0, plotH]);
+    const ink = css('--muted'), grid = css('--grid'), inkP = css('--text-primary'), ink2 = css('--text-secondary');
+    const draw = () => {
+      const dx = DX + st.px * 12, dy = DY + st.py * 7;
+      const X = (d, b) => m.l + (d / maxD) * plotW + b * dx, Y = (v, b) => H - m.b - b * dy - hs(v);
+      ctx.clearRect(0, 0, W, H); ctx.lineJoin = 'round';
+      fillPoly(ctx, [[X(0, 0), Y(0, 0)], [X(maxD, 0), Y(0, 0)], [X(maxD, B), Y(0, B)], [X(0, B), Y(0, B)]], css('--surface-2'));
+      ctx.font = '11.5px system-ui, -apple-system, "Segoe UI", sans-serif'; ctx.lineWidth = 1; ctx.strokeStyle = grid; ctx.fillStyle = ink;
+      [500, 1000, 2000, 4000].filter((v) => v <= maxV).forEach((v) => { ctx.beginPath(); ctx.moveTo(X(0, B), Y(v, B)); ctx.lineTo(X(maxD, B), Y(v, B)); ctx.stroke(); ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText(full(v), X(0, B) - 6, Y(v, B)); });
+      for (let d = 0; d <= maxD; d += 20) { ctx.beginPath(); ctx.moveTo(X(d, 0), Y(0, 0)); ctx.lineTo(X(d, B), Y(0, B)); ctx.stroke(); ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText(d, X(d, 0), Y(0, 0) + 6); }
+      ctx.textAlign = 'right'; ctx.fillText('depth below Main', X(maxD, 0), Y(0, 0) + 20);
+      Pd.groups.forEach((g, gi) => {
+        const b = B - gi, base = d3.color(groupColor(g)), pts = rows.map((r) => [X(r[0], b), Y(r[gi + 1], b)]);
+        const face = [[X(0, b), Y(0, b)]].concat(pts, [[X(maxD, b), Y(0, b)]]), ox = dx * 0.42, oy = -dy * 0.42;
+        fillPoly(ctx, face.map((p) => [p[0] + ox, p[1] + oy]), base.darker(0.9));
+        const gr = ctx.createLinearGradient(0, Y(maxV, b), 0, Y(0, b)); gr.addColorStop(0, base.brighter(0.5)); gr.addColorStop(1, base);
+        fillPoly(ctx, face, gr);
+        ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.strokeStyle = base.brighter(1.1); ctx.lineWidth = 1.2; ctx.stroke();
+        if (!narrow) { ctx.fillStyle = ink2; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(g, X(maxD, b) + 10, Y(0, b) - 3); }
+      });
+      if (st.hover != null) {
+        const d = st.hover, r = byD.get(d); ctx.strokeStyle = inkP; ctx.globalAlpha = 0.5; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(d, 0), Y(0, 0)); ctx.lineTo(X(d, B), Y(0, B)); ctx.stroke(); ctx.globalAlpha = 1;
+        if (r) Pd.groups.forEach((g, gi) => { const b = B - gi; if (!r[gi + 1]) return; ctx.beginPath(); ctx.arc(X(d, b), Y(r[gi + 1], b), 4, 0, 6.2832); ctx.fillStyle = groupColor(g); ctx.fill(); ctx.strokeStyle = css('--surface-1'); ctx.lineWidth = 2; ctx.stroke(); });
+      }
+    };
+    draw();
+    cv.addEventListener('pointermove', (ev) => {
+      const [mx, my] = pos(cv, ev); st.px = mx / W - 0.5; st.py = my / H - 0.5;
+      const d = Math.max(0, Math.min(maxD, Math.round(((mx - m.l - (DX + st.px * 12) * 2) / plotW) * maxD))), r = byD.get(d); st.hover = d; draw();
+      if (r) showTip(tipRows(`Depth ${d}`, [['All modules', full(d3.sum(r.slice(1)))]].concat(Pd.groups.map((g, gi) => [g, r[gi + 1]]).filter((x) => x[1] > 0).map(([g, v]) => [`${swatch(g)} ${esc(g)}`, full(v)]))), ev, cv);
     });
-    const cross = svg.append('rect').attr('fill', css('--text-primary')).attr('opacity', 0).attr('width', 1).attr('y', m.t).attr('height', H - m.b - m.t);
-    svg.append('g').selectAll('rect').data(rows).join('rect')
-      .attr('x', (d) => x(d.d)).attr('width', x.bandwidth()).attr('y', m.t).attr('height', H - m.b - m.t).attr('fill', 'transparent')
-      .on('mouseenter mousemove', function (ev, d) {
-        cross.attr('x', x(d.d) + bw / 2).attr('opacity', 0.35);
-        showTip(tipRows(`Depth ${d.d}`, [['All modules', full(d.total)]].concat(P.groups.filter((g) => d[g] > 0).map((g) => [`${swatch(g)} ${esc(g)}`, full(d[g])]))), ev, this);
-      })
-      .on('mouseleave', () => { cross.attr('opacity', 0); hideTip(); });
-    $('#depth-legend').innerHTML = legendHtml(P.groups);
-    $('#depth-table').innerHTML = `<table><thead><tr><th>Depth</th>${P.groups.map((g) => `<th>${esc(g)}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
-      rows.map((r) => `<tr><td>${r.d}</td>${P.groups.map((g) => `<td>${full(r[g])}</td>`).join('')}<td>${full(r.total)}</td></tr>`).join('') + '</tbody></table>';
+    cv.addEventListener('pointerleave', () => { st.hover = null; st.px = 0; st.py = 0; hideTip(); draw(); });
+    $('#depth-legend').innerHTML = legendHtml(Pd.groups);
+    $('#depth-table').innerHTML = `<table><thead><tr><th>Depth</th>${Pd.groups.map((g) => `<th>${esc(g)}</th>`).join('')}<th>Total</th></tr></thead><tbody>` +
+      rows.map((r) => `<tr><td>${r[0]}</td>${r.slice(1).map((v) => `<td>${full(v)}</td>`).join('')}<td>${full(d3.sum(r.slice(1)))}</td></tr>`).join('') + '</tbody></table>';
   }
 
-  /* ---------- longest chain ---------- */
+  /* ---------- longest chain: a turning helix ---------- */
   let chainAll = false;
   function renderChain() {
-    const C = D.chain;
-    $('#chain-sub').innerHTML = `The longest path of imports below <code>Main</code>: ${C.length} modules, one block each, colored by library. Hover or focus a block to see the module.`;
-    const used = GROUPS.filter((g) => C.some((c) => c[1] === g));
-    $('#chain-legend').innerHTML = legendHtml(used);
-    const strip = $('#chain-strip');
-    strip.innerHTML = C.map((c, i) => `<button type="button" data-i="${i}" style="background:${groupColor(c[1])}" aria-label="Step ${i + 1}: ${esc(c[0])}"></button>`).join('');
-    strip.querySelectorAll('button').forEach((b) => {
-      const c = C[+b.dataset.i];
-      const h = tipRows(`Step ${+b.dataset.i + 1} of ${C.length}`, [['Module', `<code>${esc(c[0])}</code>`], ['Library', esc(c[1])], ['Lines', full(c[2])], ['Theorems', full(c[3])]]);
-      b.addEventListener('mouseenter', (ev) => showTip(h, ev, b)); b.addEventListener('mousemove', (ev) => showTip(h, ev, b));
-      b.addEventListener('focus', (ev) => showTip(h, ev, b)); b.addEventListener('mouseleave', hideTip); b.addEventListener('blur', hideTip);
+    const C = D.chain, n = C.length, el = $('#chain-3d');
+    $('#chain-sub').innerHTML = `The longest path of imports below <code>Main</code>: ${n} modules, drawn as a helix with one bead per module, colored by library. Hover a bead to see the module.`;
+    $('#chain-legend').innerHTML = legendHtml(GROUPS.filter((g) => C.some((c) => c[1] === g)));
+    const { cv, ctx, W, H } = canvas3(el, 'chain', (w) => (w < 640 ? 210 : 300), `A helix of ${n} beads, one per module on the longest import chain; the list below names them.`);
+    const st = S3.chain || (S3.chain = { rot: 0, hover: -1, last: 0 });
+    const padX = W < 640 ? 22 : 46, amp = H / 2 - 30, turn = W < 640 ? 0.3 : 0.19;
+    const draw = (now) => {
+      if (motionOK && st.hover < 0) st.rot += Math.min(50, now - (st.last || now)) * 0.0007; st.last = now;
+      ctx.clearRect(0, 0, W, H);
+      const pts = C.map((c, i) => { const th = i * turn + st.rot, z = Math.sin(th), k = 3.2 / (3.2 - z); return { i, x: padX + (i / (n - 1)) * (W - 2 * padX), y: H / 2 + Math.cos(th) * amp * k * 0.82, z, k, g: c[1] }; });
+      ctx.beginPath(); pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.strokeStyle = css('--axis'); ctx.lineWidth = 1; ctx.stroke();
+      const surf = css('--surface-1');
+      pts.slice().sort((a, b) => a.z - b.z).forEach((p) => {
+        const r = (W < 640 ? 2.8 : 5) * p.k * (p.i === st.hover ? 1.7 : 1);
+        ctx.globalAlpha = p.i === st.hover ? 1 : 0.42 + 0.58 * (p.z + 1) / 2;
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.2832); ctx.fillStyle = groupColor(p.g); ctx.fill();
+        if (p.i === st.hover) { ctx.lineWidth = 2; ctx.strokeStyle = css('--text-primary'); ctx.stroke(); } else if (p.z > 0.2) { ctx.lineWidth = 1; ctx.strokeStyle = surf; ctx.stroke(); }
+      });
+      ctx.globalAlpha = 1; st.pts = pts;
+      ctx.font = '12px system-ui, -apple-system, "Segoe UI", sans-serif'; ctx.fillStyle = css('--muted'); ctx.textBaseline = 'bottom';
+      ctx.textAlign = 'left'; ctx.fillText('Main', padX - 14, H - 2); ctx.textAlign = 'right'; ctx.fillText(`step ${n}`, W - padX + 14, H - 2);
+    };
+    anim.chain = { fn: draw, vis: true }; draw(performance.now());
+    cv.addEventListener('pointermove', (ev) => {
+      const [mx, my] = pos(cv, ev); let best = -1, bd = 16 * 16;
+      (st.pts || []).forEach((p) => { const d = (p.x - mx) ** 2 + (p.y - my) ** 2 - p.z * 20; if (d < bd) { bd = d; best = p.i; } });
+      st.hover = best;
+      if (best >= 0) { const c = C[best]; showTip(tipRows(`Step ${best + 1} of ${n}`, [['Module', `<code>${esc(c[0])}</code>`], ['Library', esc(c[1])], ['Lines', full(c[2])], ['Theorems', full(c[3])]]), ev, cv); } else hideTip();
+      if (!motionOK) draw(performance.now());
     });
+    cv.addEventListener('pointerleave', () => { st.hover = -1; hideTip(); if (!motionOK) draw(performance.now()); });
     const li = (c, i) => `<li><span class="n">${i + 1}</span>${swatch(c[1])}<code>${esc(c[0])}</code></li>`;
     const list = $('#chain-list');
-    if (chainAll || C.length <= 14) list.innerHTML = C.map(li).join('');
+    if (chainAll || n <= 14) list.innerHTML = C.map(li).join('');
     else list.innerHTML = C.slice(0, 8).map(li).join('') +
-      `<li class="gap"><button type="button" class="theme" id="chain-more">Show all ${C.length} steps</button></li>` +
-      C.slice(-4).map((c, k) => li(c, C.length - 4 + k)).join('');
+      `<li class="gap"><button type="button" class="theme" id="chain-more">Show all ${n} steps</button></li>` +
+      C.slice(-4).map((c, k) => li(c, n - 4 + k)).join('');
     const more = $('#chain-more'); if (more) more.addEventListener('click', () => { chainAll = true; renderChain(); });
   }
 
@@ -460,5 +512,5 @@
     treePath = [D.tree];
     renderAll();
   }).catch((e) => { $('#kpis').innerHTML = `<p class="loading">Could not load the data: ${esc(e.message)}</p>`; });
-  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawCosmos(); renderTree(); renderMatrix(); renderDepth(); renderFanin(); renderMathlib(); }, 150); });
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawCosmos(); renderTree(); renderMatrix(); renderDepth(); renderChain(); renderFanin(); renderMathlib(); }, 150); });
 })();

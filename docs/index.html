@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Riemann Hypothesis Proof — a map of the Lean project</title>
+  <title>The Riemann Hypothesis in Lean — The Magnificent Age of Research</title>
   <meta name="description" content="An interactive map of a Lean 4 project whose main theorem is the Riemann Hypothesis: its statements, its 175,187 modules, and how they import one another.">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
@@ -11,7 +11,7 @@
 <body>
   <header class="top">
     <div class="wrap">
-      <span class="brand">RH in Lean</span>
+      <span class="brand">The Magnificent Age of Research</span>
       <nav aria-label="Sections">
         <a href="#theorems">Theorems</a>
         <a href="#code">Codebase</a>
@@ -92,7 +92,7 @@
 
     <section class="block" id="libraries">
       <h2>How the libraries import one another</h2>
-      <p class="sub">Rows import from columns. Each cell counts import lines from modules in the row's library to modules in the column's library; the diagonal counts imports within a library. Color is on a log scale.</p>
+      <p class="sub">Rows import from columns. Each tower counts import lines from modules in the row's library to modules in the column's library; the diagonal counts imports within a library. Height and color are on a log scale.</p>
       <div class="card">
         <div class="chart" id="matrix-chart"></div>
         <details class="table-view"><summary>Table view</summary><div class="tv" id="matrix-table"></div></details>
@@ -101,7 +101,7 @@
 
     <section class="block" id="depth">
       <h2>How deep the imports go</h2>
-      <p class="sub">A module's depth is the length of the longest import path from <code>Main</code> down to it. Every module in the project is reachable from <code>Main</code>, so this chart covers all of them.</p>
+      <p class="sub">A module's depth is the length of the longest import path from <code>Main</code> down to it. Every module in the project is reachable from <code>Main</code>, so this chart covers all of them. Each library is its own ridge; heights use a square-root scale so the smaller libraries stay visible.</p>
       <div class="card">
         <div class="legend" id="depth-legend"></div>
         <div class="chart" id="depth-chart"></div>
@@ -114,7 +114,7 @@
       <p class="sub" id="chain-sub">The longest path of imports below <code>Main</code>, one block per module, colored by library. Hover or focus a block to see the module.</p>
       <div class="card">
         <div class="legend" id="chain-legend"></div>
-        <div class="chain-strip" id="chain-strip"></div>
+        <div class="chart" id="chain-3d"></div>
         <ol class="chain-list" id="chain-list"></ol>
       </div>
     </section>
