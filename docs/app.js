@@ -130,13 +130,14 @@
       float cp = cos(pitch), sp = sin(pitch);
       q = vec3(q.x, q.y*cp - q.z*sp, q.y*sp + q.z*cp);
       float k = 2.6 / (2.6 - q.z);
-      gl_Position = vec4(q.x*0.88*k, q.y*aspect*0.88*k, 0.0, 1.0);
+      gl_Position = vec4(q.x*0.86*k + 0.03, q.y*aspect*0.86*k + 0.14, 0.0, 1.0);
       gl_PointSize = sz * dpr * k;
       vc = c; va = clamp(0.35 + 0.65*k*k*0.6, 0.25, 1.0);
     }`;
   const FS = `precision mediump float; varying vec3 vc; varying float va;
     void main(){ vec2 d = gl_PointCoord - 0.5; float r = length(d)*2.0; if (r > 1.0) discard;
       float a = (1.0 - r*r) * 0.46; gl_FragColor = vec4(vc*a*va, a*va); }`;
+  const TILT_YAW = 0.42, TILT_PITCH = 0.24;   // resting pose: near end toward the viewer, far end rising
   let cosmos = null;
   function hex3(h) { const c = d3.rgb(h); return [c.r / 255, c.g / 255, c.b / 255]; }
   function initCosmos3D(cv) {
@@ -165,7 +166,7 @@
     [['p', 3, 0], ['c', 3, 12], ['sz', 1, 24]].forEach(([n, size, off]) => { const l = gl.getAttribLocation(prog, n); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, size, gl.FLOAT, false, 28, off); });
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.clearColor(0, 0, 0, 0);
     const U = {}; ['rot', 'yaw', 'pitch', 'aspect', 'dpr'].forEach((n) => { U[n] = gl.getUniformLocation(prog, n); });
-    const st = { gl, U, N, rot: 0, yaw: 0.35, pitch: 0.12, tyaw: 0.35, tpitch: 0.12, visible: true, still: matchMedia('(prefers-reduced-motion: reduce)').matches, last: 0 };
+    const st = { gl, U, N, rot: 0, yaw: TILT_YAW, pitch: TILT_PITCH, tyaw: TILT_YAW, tpitch: TILT_PITCH, visible: true, still: matchMedia('(prefers-reduced-motion: reduce)').matches, last: 0 };
     st.frame = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2), W = cv.clientWidth, H = cv.clientHeight;
       if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
@@ -176,8 +177,8 @@
     };
     const loop = (now) => { if (st.visible && !st.still) { st.rot += Math.min(50, now - (st.last || now)) * 0.00016; st.frame(); } st.last = now; requestAnimationFrame(loop); };
     const hero = cv.closest('.grand');
-    hero.addEventListener('pointermove', (ev) => { const b = hero.getBoundingClientRect(); st.tyaw = 0.35 + ((ev.clientX - b.left) / b.width - 0.5) * 0.9; st.tpitch = 0.12 + ((ev.clientY - b.top) / b.height - 0.5) * 0.5; if (st.still) st.frame(); });
-    hero.addEventListener('pointerleave', () => { st.tyaw = 0.35; st.tpitch = 0.12; });
+    hero.addEventListener('pointermove', (ev) => { const b = hero.getBoundingClientRect(); st.tyaw = TILT_YAW + ((ev.clientX - b.left) / b.width - 0.5) * 0.9; st.tpitch = TILT_PITCH + ((ev.clientY - b.top) / b.height - 0.5) * 0.5; if (st.still) st.frame(); });
+    hero.addEventListener('pointerleave', () => { st.tyaw = TILT_YAW; st.tpitch = TILT_PITCH; });
     new IntersectionObserver((es) => { st.visible = es[0].isIntersecting; }).observe(cv);
     st.frame(); requestAnimationFrame(loop);
     return st;
